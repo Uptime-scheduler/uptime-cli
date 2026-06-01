@@ -56,15 +56,15 @@ jobs:
             -e "s|{{VERSION}}|$VERSION|g" \
             -e "s|{{ARM_SHA}}|$ARM_SHA|g" \
             -e "s|{{X86_SHA}}|$X86_SHA|g" \
-            homebrew-tap/Formula/uptime.rb.tpl > homebrew-tap/Formula/uptime.rb
-          cat homebrew-tap/Formula/uptime.rb
+            homebrew-tap/Formula/uptimectl.rb.tpl > homebrew-tap/Formula/uptimectl.rb
+          cat homebrew-tap/Formula/uptimectl.rb
 
       - name: Commit and push Formula update
         working-directory: homebrew-tap
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add Formula/uptime.rb
+          git add Formula/uptimectl.rb
           git diff --cached --quiet && echo "Formula unchanged" && exit 0
           git commit -m "uptime ${{ steps.meta.outputs.tag }}"
           git push
