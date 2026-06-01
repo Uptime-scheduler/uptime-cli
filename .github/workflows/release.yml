@@ -14,28 +14,22 @@ jobs:
     name: Update Homebrew tap
     runs-on: ubuntu-latest
     steps:
-      - name: Resolve tag
-        id: tag
+      - name: Resolve tag and version
+        id: meta
         run: |
           TAG="${{ github.event.release.tag_name || inputs.tag }}"
           VERSION="${TAG#v}"
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
+          echo "tag=$TAG"         >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "Resolved tag: $TAG"
-          echo "Resolved version: $VERSION"
 
       - name: Download SHA256 files from release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release download "${{ steps.tag.outputs.tag }}" \
+          gh release download "${{ steps.meta.outputs.tag }}" \
             --repo Uptime-scheduler/uptime-cli \
             --pattern "*.sha256" \
             --dir artifacts/
-          echo "Downloaded files:"
-          ls -la artifacts/
-          echo "SHA file contents:"
-          cat artifacts/*.sha256
 
       - name: Compute Homebrew SHAs
         id: shas
@@ -44,8 +38,6 @@ jobs:
           X86_SHA=$(grep -h "macos-x86_64" artifacts/*.sha256 | awk '{print $1}')
           echo "arm_sha=$ARM_SHA" >> "$GITHUB_OUTPUT"
           echo "x86_sha=$X86_SHA" >> "$GITHUB_OUTPUT"
-          echo "ARM SHA: $ARM_SHA"
-          echo "X86 SHA: $X86_SHA"
 
       - name: Checkout Homebrew tap
         uses: actions/checkout@v4
@@ -54,51 +46,25 @@ jobs:
           token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
           path: homebrew-tap
 
-      - name: Write Formula
+      - name: Update Formula
+        env:
+          VERSION: ${{ steps.meta.outputs.version }}
+          ARM_SHA: ${{ steps.shas.outputs.arm_sha }}
+          X86_SHA: ${{ steps.shas.outputs.x86_sha }}
         run: |
-          VERSION="${{ steps.tag.outputs.version }}"
-          ARM_SHA="${{ steps.shas.outputs.arm_sha }}"
-          X86_SHA="${{ steps.shas.outputs.x86_sha }}"
-          REPO="Uptime-scheduler/uptime-cli"
-
-          cat > homebrew-tap/Formula/uptime.rb << RUBY
-# frozen_string_literal: true
-class Uptime < Formula
-  desc "CLI for managing Uptime Scheduler — start, stop, and schedule AWS resources"
-  homepage "https://uptimescheduler.com"
-  version "$VERSION"
-  license "BUSL-1.1"
-
-  on_macos do
-    on_arm do
-      url "https://github.com/$REPO/releases/download/v$VERSION/uptime-macos-arm64.tar.gz"
-      sha256 "$ARM_SHA"
-    end
-    on_intel do
-      url "https://github.com/$REPO/releases/download/v$VERSION/uptime-macos-x86_64.tar.gz"
-      sha256 "$X86_SHA"
-    end
-  end
-
-  def install
-    bin.install "uptime"
-  end
-
-  test do
-    assert_match "uptime", shell_output("#{bin}/uptime --version")
-  end
-end
-RUBY
-
-          echo "Formula written:"
+          sed \
+            -e "s|{{VERSION}}|$VERSION|g" \
+            -e "s|{{ARM_SHA}}|$ARM_SHA|g" \
+            -e "s|{{X86_SHA}}|$X86_SHA|g" \
+            homebrew-tap/Formula/uptime.rb.tpl > homebrew-tap/Formula/uptime.rb
           cat homebrew-tap/Formula/uptime.rb
 
-      - name: Commit and push
+      - name: Commit and push Formula update
         working-directory: homebrew-tap
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add Formula/uptime.rb
-          git diff --cached --quiet && echo "Formula unchanged, skipping" && exit 0
-          git commit -m "uptime ${{ steps.tag.outputs.tag }}"
+          git diff --cached --quiet && echo "Formula unchanged" && exit 0
+          git commit -m "uptime ${{ steps.meta.outputs.tag }}"
           git push
