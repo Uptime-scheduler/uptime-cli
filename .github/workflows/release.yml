@@ -42,7 +42,7 @@ jobs:
 
       - name: Update Formula
         env:
-          VERSION: ${{ github.event.release.tag_name }}
+          VERSION: ${{ github.event.release.tag_name || inputs.tag }}
           ARM_SHA: ${{ steps.shas.outputs.arm_sha }}
           X86_SHA: ${{ steps.shas.outputs.x86_sha }}
           REPO: Uptime-scheduler/uptime-cli
@@ -85,5 +85,5 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add Formula/uptime.rb
           git diff --cached --quiet && echo "Formula unchanged, skipping" && exit 0
-          git commit -m "uptime ${{ github.event.release.tag_name }}"
+          git commit -m "uptime ${{ github.event.release.tag_name || inputs.tag }}"
           git push
